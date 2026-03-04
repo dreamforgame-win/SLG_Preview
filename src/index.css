@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-float-up: floatUp 1s ease-out forwards;
+  --animate-attack-right: attackBumpRight 0.3s ease-in-out;
+  --animate-attack-left: attackBumpLeft 0.3s ease-in-out;
+  --animate-skill-cast: skillCast 0.5s ease-in-out;
+
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-30px) scale(1.2); opacity: 0; }
+  }
+  @keyframes attackBumpRight {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(15px); }
+    100% { transform: translateX(0); }
+  }
+  @keyframes attackBumpLeft {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(-15px); }
+    100% { transform: translateX(0); }
+  }
+  @keyframes skillCast {
+    0% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.2); filter: brightness(1.5); }
+    100% { transform: scale(1); filter: brightness(1); }
+  }
+}
+
