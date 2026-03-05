@@ -11,7 +11,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
 
   // API Routes
   app.get('/api/ppt', (req, res) => {
@@ -31,7 +31,17 @@ async function startServer() {
   app.post('/api/ppt', (req, res) => {
     try {
       const data = req.body;
+      console.log('Received save request. Data length:', JSON.stringify(data).length);
+      console.log('Writing to file:', DATA_FILE);
+      
+      // Ensure directory exists
+      const dir = path.dirname(DATA_FILE);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      console.log('File written successfully.');
       res.json({ success: true });
     } catch (error) {
       console.error('Error saving PPT data:', error);

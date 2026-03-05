@@ -9,7 +9,7 @@ interface Tab {
 }
 
 const DEFAULT_TABS: Tab[] = [
-  { id: '1', name: '第一页', content: '这里是第一页的内容...' }
+  { id: '1', name: '第一页', content: '这里是第一页的内容...\n\n支持 Markdown 语法，例如：\n\n- 列表项 1\n- 列表项 2\n\n**加粗文本**\n\n![示例图片](https://picsum.photos/seed/ppt/400/300)' }
 ];
 
 export const PPTMode: React.FC = () => {
@@ -37,21 +37,9 @@ export const PPTMode: React.FC = () => {
             setActiveTabId(DEFAULT_TABS[0].id);
           }
         } else {
-          // Fallback to local storage if API fails or not available
-          const saved = localStorage.getItem('ppt_tabs');
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved);
-              setTabs(parsed);
-              if (parsed.length > 0) setActiveTabId(parsed[0].id);
-            } catch (e) {
-              setTabs(DEFAULT_TABS);
-              setActiveTabId(DEFAULT_TABS[0].id);
-            }
-          } else {
-            setTabs(DEFAULT_TABS);
-            setActiveTabId(DEFAULT_TABS[0].id);
-          }
+          console.error('Failed to fetch PPT data from server');
+          setTabs(DEFAULT_TABS);
+          setActiveTabId(DEFAULT_TABS[0].id);
         }
       } catch (error) {
         console.error('Failed to fetch PPT data:', error);
@@ -70,17 +58,8 @@ export const PPTMode: React.FC = () => {
 
   const saveTabs = async (newTabs: Tab[]) => {
     setTabs(newTabs);
-    localStorage.setItem('ppt_tabs', JSON.stringify(newTabs));
-    
-    try {
-      await fetch('/api/ppt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTabs),
-      });
-    } catch (error) {
-      console.error('Failed to save PPT data to server:', error);
-    }
+    // We don't auto-save to file on every change anymore, only on manual save.
+    // But we update the local state to keep the UI responsive.
   };
 
   const handleAddTab = () => {
@@ -153,6 +132,40 @@ export const PPTMode: React.FC = () => {
     }
   };
 
+  const handleManualSave = async () => {
+    // Construct the latest data
+    const dataToSave = isEditing 
+      ? tabs.map(t => t.id === activeTabId ? { ...t, content: editContent } : t)
+      : tabs;
+
+    // Update local state
+    setTabs(dataToSave);
+
+    // Update server file
+    try {
+      const response = await fetch('/api/ppt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSave),
+      });
+      
+      if (response.ok) {
+        alert('写入存档成功！');
+        // Re-fetch to ensure consistency with file
+        const res = await fetch('/api/ppt');
+        if (res.ok) {
+          const data = await res.json();
+          setTabs(data);
+        }
+      } else {
+        alert('写入存档失败，请重试。');
+      }
+    } catch (error) {
+      console.error('Failed to save:', error);
+      alert('写入存档出错。');
+    }
+  };
+
   const activeTab = tabs.find(t => t.id === activeTabId);
 
   // Stop propagation for all mouse events to prevent map interaction
@@ -184,7 +197,15 @@ export const PPTMode: React.FC = () => {
           onMouseMove={stopPropagation}
         >
           <div className="flex justify-between items-center p-4 border-b border-[#333] bg-[#222]">
-            <h2 className="text-lg font-bold text-[#00d2ff]">信息预览</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-bold text-[#00d2ff]">信息预览</h2>
+              <button 
+                onClick={handleManualSave}
+                className="px-2 py-1 text-xs bg-[#00d2ff]/20 text-[#00d2ff] border border-[#00d2ff] rounded hover:bg-[#00d2ff]/30 transition-colors"
+              >
+                写入存档
+              </button>
+            </div>
             <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
               <X size={20} />
             </button>
