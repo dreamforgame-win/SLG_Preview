@@ -24,7 +24,9 @@ const DEFAULT_TABS: Tab[] = [
         - 有成本则需要盟主消耗联盟资源进行道路开拓（即时间成本+资源成本）
           - 开拓可以【职业】加速，对应职业成员派兵集合即可加速开拓
       - 或者增加连通收益
-        - 连通后玩家在区域内的行军速度得到提升` 
+        - 连通后玩家在区域内的行军速度得到提升
+        
+          ` 
   },
   {
     id: '2',
@@ -52,7 +54,9 @@ const DEFAULT_TABS: Tab[] = [
     - 城市加成激活则需要玩家主城提供，区域内的玩家主城越多，城市加成越高
       - 要求玩家主城根据战役调整，形成主力在前，成员在后的布局，但是大家都会依托在城市脉络里面，形成抱团的趋势
 
-![图片描述](https://gd-hbimg-edge.huaban.com/21e5698a6ba337b78b95f01e9dd4068fb8540f741935b-kHCCN0?auth_key=1772683200-8be56e16f3b941f9bf734d01c3cf88d1-0-311b78848f36d756d92bf9241a89b91b)`
+![图片描述](https://gd-hbimg-edge.huaban.com/21e5698a6ba337b78b95f01e9dd4068fb8540f741935b-kHCCN0?auth_key=1772697600-ba9d1322c15a4cafba79c20e7c3f141e-0-80a8c54bf2513ae739dce40c09522daa)
+
+   `
   },
   {
     id: '3',
@@ -70,7 +74,9 @@ const DEFAULT_TABS: Tab[] = [
     - 加入Y轴地形
       - 高地
       - 盆地
-      - 峡谷`
+      - 峡谷
+      
+      `
   },
   {
     id: '4',
@@ -105,7 +111,9 @@ const DEFAULT_TABS: Tab[] = [
         - 每个英雄技能固定，但是存在一条独特的天赋树
         - 通过天赋树延伸至不同的分支，扩展英雄的可选方向
         - 引入类似圣遗物或专武的设定
-          - 追求获得英雄后转向装备/套装收集，付费转向与刷刷刷`
+          - 追求获得英雄后转向装备/套装收集，付费转向与刷刷刷
+          
+          `
   },
   {
     id: '5',
@@ -133,7 +141,9 @@ const DEFAULT_TABS: Tab[] = [
         - 随机技能*1~2，获得时随机，随机技能一般作用在空间效果，给其他格子增益
           - 随机技能也有品质之分，品质越高加成越高（30%收益）
           - 可以消耗资源进行重置
-        - 通过固定技能和随机技能，引导玩家在城市的建设布局层面有所投入（主要是随机技能），通过调整建筑位置达到收益最大化`
+        - 通过固定技能和随机技能，引导玩家在城市的建设布局层面有所投入（主要是随机技能），通过调整建筑位置达到收益最大化
+        
+        `
   }
 ];
 
@@ -151,7 +161,7 @@ export const PPTMode: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/ppt');
+        const response = await fetch(`/api/ppt?t=${Date.now()}`);
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -596,7 +606,7 @@ export const PPTMode: React.FC = () => {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-y-auto p-4 bg-[#1a1a1a]">
+          <div className="flex-1 overflow-y-auto p-4 pb-10 bg-[#1a1a1a]">
             {activeTab ? (
               isEditing ? (
                 <textarea
