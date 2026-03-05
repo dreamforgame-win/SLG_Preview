@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { PPTMode } from './PPTMode';
 import { AppointmentModal } from './components/AppointmentModal';
 import { Official, INITIAL_OFFICIALS, generateRandomSkill } from './data/officials';
 
@@ -504,31 +505,48 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
     
     const cell = mapData.map[c][r];
     
+    const prevSelectedCity = selectedCity;
+    const prevSelectedPass = selectedPass;
+    const prevSelectedPlayerCity = selectedPlayerCity;
+    const prevSelectedBuildCell = selectedBuildCell;
+    const prevSelectedBuildingInfo = selectedBuildingInfo;
+
     // Close all menus first
     setSelectedCity(null);
     setSelectedPass(null);
     setSelectedPlayerCity(null);
     setSelectedBuildCell(null);
+    setSelectedBuildingInfo(null);
 
     const existingBuilding = buildings.find(b => b.q === c && b.r === r);
 
     if (cell.isPlayerCity) {
-      setSelectedPlayerCity({ x: e.clientX, y: e.clientY });
+      if (!prevSelectedPlayerCity) {
+        setSelectedPlayerCity({ x: e.clientX, y: e.clientY });
+      }
     } else if (existingBuilding) {
-      setSelectedBuildingInfo({ building: existingBuilding, x: e.clientX, y: e.clientY });
+      if (!(prevSelectedBuildingInfo && prevSelectedBuildingInfo.building.q === c && prevSelectedBuildingInfo.building.r === r)) {
+        setSelectedBuildingInfo({ building: existingBuilding, x: e.clientX, y: e.clientY });
+      }
     } else if (cell.terrain === 'plain') {
-      const cityBuildable = getCityBuildableCells();
-      const isCityBuildable = cityBuildable.some(b => b.q === c && b.r === r);
-      
-      if (isCityBuildable && buildPoints > 0) {
-        setSelectedBuildCell({ q: c, r: r, x: e.clientX, y: e.clientY, type: 'both' });
-      } else {
-        setSelectedBuildCell({ q: c, r: r, x: e.clientX, y: e.clientY, type: 'combat' });
+      if (!(prevSelectedBuildCell && prevSelectedBuildCell.q === c && prevSelectedBuildCell.r === r)) {
+        const cityBuildable = getCityBuildableCells();
+        const isCityBuildable = cityBuildable.some(b => b.q === c && b.r === r);
+        
+        if (isCityBuildable && buildPoints > 0) {
+          setSelectedBuildCell({ q: c, r: r, x: e.clientX, y: e.clientY, type: 'both' });
+        } else {
+          setSelectedBuildCell({ q: c, r: r, x: e.clientX, y: e.clientY, type: 'combat' });
+        }
       }
     } else if (cell.terrain === 'city' && cell.cityId) {
-      setSelectedCity({ id: cell.cityId, x: e.clientX, y: e.clientY });
+      if (!(prevSelectedCity && prevSelectedCity.id === cell.cityId)) {
+        setSelectedCity({ id: cell.cityId, x: e.clientX, y: e.clientY });
+      }
     } else if (cell.terrain === 'pass') {
-      setSelectedPass({ q: c, r: r, x: e.clientX, y: e.clientY });
+      if (!(prevSelectedPass && prevSelectedPass.q === c && prevSelectedPass.r === r)) {
+        setSelectedPass({ q: c, r: r, x: e.clientX, y: e.clientY });
+      }
     }
   };
 
@@ -665,6 +683,7 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
          onClick={handleMouseClick}>
       
       <div className="absolute top-4 left-4 z-10 flex gap-4">
+        <PPTMode />
         <button 
           onClick={onEnterBattle}
           className="bg-[#00ff88] text-black px-4 py-2 rounded font-bold shadow-[0_0_10px_rgba(0,255,136,0.5)] hover:scale-105 transition-transform cursor-pointer"
