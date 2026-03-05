@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { PPTMode } from './PPTMode';
 import { Unit, Team, UnitType, SkillType, LogEntry, Prop, PropType, FormationType } from './types';
 import { CLASS_DATA, SKILL_DATA, PROP_DATA, FORMATION_DATA } from './constants';
 
@@ -568,15 +569,19 @@ export default function BattleSimulator({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="h-screen bg-[#1e1e24] text-white p-5 flex flex-col items-center font-sans select-none overflow-hidden">
+    <div className="h-screen bg-[#1e1e24] text-white p-5 flex flex-col items-center font-sans select-none overflow-hidden relative">
+      <div className="absolute top-4 left-4 z-50 flex gap-4 items-center">
+        <PPTMode />
+        <button 
+          onClick={onBack}
+          className="bg-[#444] text-white px-3 py-2 rounded text-sm hover:bg-[#555] transition-colors border border-[#666] font-bold shadow-lg"
+        >
+          ← 返回大地图
+        </button>
+      </div>
+
       <div className="w-full max-w-[1200px] flex flex-col h-full gap-4">
         <div className="flex-shrink-0 relative">
-          <button 
-            onClick={onBack}
-            className="absolute left-0 top-1 bg-[#444] text-white px-3 py-1 rounded text-sm hover:bg-[#555] transition-colors"
-          >
-            ← 返回大地图
-          </button>
           <h2 className="text-xl font-bold tracking-wide mb-1 text-white text-center">自定义阵地 - 战局模拟器</h2>
           <div className="text-[#aaa] text-[13px] text-center">
             【1.拖拽兵种至阵区】 → 【2.布置备战物件】 → 【3.选择阵法与技能】 → 【4.开始演算】
