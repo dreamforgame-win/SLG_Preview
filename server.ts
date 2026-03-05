@@ -24,7 +24,7 @@ async function startServer() {
       cwd: process.cwd(),
       dataFile: DATA_FILE,
       fileExists: fs.existsSync(DATA_FILE),
-      fileContent: fs.existsSync(DATA_FILE) ? fs.readFileSync(DATA_FILE, 'utf-8').substring(0, 100) + '...' : 'File not found'
+      fileContent: fs.existsSync(DATA_FILE) ? fs.readFileSync(DATA_FILE, 'utf-8') : 'File not found'
     });
   });
 
