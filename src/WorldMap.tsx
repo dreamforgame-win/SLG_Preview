@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { AppointmentModal } from './components/AppointmentModal';
+import { Official, INITIAL_OFFICIALS, generateRandomSkill } from './data/officials';
 
 const COLS = 50;
 const ROWS = 50;
@@ -25,6 +27,35 @@ interface CityData {
   color: string;
   regionIndex: number;
 }
+
+interface Appointments {
+  chief: string | null;
+  deputies: (string | null)[];
+  disciples: (string | null)[];
+}
+
+interface BuildingData {
+  q: number;
+  r: number;
+  type: string;
+  appointments?: Appointments;
+}
+
+const CITY_BUILDING_TYPES = [
+  { id: 'farm', name: '农田', icon: '🌾', color: '#8b5a2b' },
+  { id: 'mine', name: '矿场', icon: '⛏️', color: '#708090' },
+  { id: 'market', name: '集市', icon: '💰', color: '#ffd700' },
+  { id: 'barracks', name: '兵营', icon: '⚔️', color: '#b22222' }
+];
+
+const COMBAT_BUILDING_TYPES = [
+  { id: 'chevaux_de_frise', name: '拒马', icon: '🚧', color: '#8b4513' },
+  { id: 'arrow_tower', name: '箭塔', icon: '🗼', color: '#cd5c5c' },
+  { id: 'wall', name: '城墙', icon: '🧱', color: '#696969' },
+  { id: 'trap', name: '陷阱', icon: '🕳️', color: '#555555' }
+];
+
+const ALL_BUILDING_TYPES = [...CITY_BUILDING_TYPES, ...COMBAT_BUILDING_TYPES];
 
 function offsetToCube(col: number, row: number) {
   const x = col - (row - (row & 1)) / 2;
@@ -176,33 +207,40 @@ function generateMapData() {
     }
   }
 
-  // Player city
-  let playerPlaced = false;
-  while (!playerPlaced) {
-    const q = Math.floor(Math.random() * COLS);
-    const r = Math.floor(Math.random() * 24) + 25;
-    if (map[q][r].terrain === 'plain') {
-      map[q][r].isPlayerCity = true;
-      playerPlaced = true;
-    }
-  }
+  // Fixed Player city at 32, 41
+  map[32][41].terrain = 'plain'; // Ensure it's plain
+  map[32][41].isPlayerCity = true;
 
   return { map, cities };
 }
 
-const SAVED_MAP_KEY = 'slg_saved_map_v2';
-const SAVED_OCCUPATION_KEY = 'slg_occupation_v2';
+const SAVED_MAP_KEY = 'slg_saved_map_v3';
+const SAVED_OCCUPATION_KEY = 'slg_occupation_v3';
+const SAVED_PLAYER_DATA_KEY = 'slg_player_data_v3';
+const SAVED_OFFICIALS_KEY = 'slg_officials_v3';
 
 export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void }) {
   const [mapData, setMapData] = useState<{map: HexCell[][], cities: CityData[]} | null>(null);
   const [occupiedCities, setOccupiedCities] = useState<string[]>([]);
   const [occupiedPasses, setOccupiedPasses] = useState<string[]>([]); // "q,r" format
+  
+  // Player Data
+  const [playerLevel, setPlayerLevel] = useState(1);
+  const [buildPoints, setBuildPoints] = useState(0);
+  const [buildings, setBuildings] = useState<BuildingData[]>([]);
+  const [officials, setOfficials] = useState<Official[]>(INITIAL_OFFICIALS);
+
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
+  const dragDistanceRef = useRef(0);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
   const [hoveredCell, setHoveredCell] = useState<{q: number, r: number, x: number, y: number} | null>(null);
   const [selectedCity, setSelectedCity] = useState<{id: string, x: number, y: number} | null>(null);
   const [selectedPass, setSelectedPass] = useState<{q: number, r: number, x: number, y: number} | null>(null);
+  const [selectedPlayerCity, setSelectedPlayerCity] = useState<{x: number, y: number} | null>(null);
+  const [selectedBuildCell, setSelectedBuildCell] = useState<{q: number, r: number, x: number, y: number, type: 'city' | 'combat' | 'both'} | null>(null);
+  const [selectedBuildingInfo, setSelectedBuildingInfo] = useState<{building: BuildingData, x: number, y: number} | null>(null);
+  const [selectedBuildingForAppointment, setSelectedBuildingForAppointment] = useState<BuildingData | null>(null);
   const [celebration, setCelebration] = useState<{x: number, y: number, text: string} | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -210,6 +248,7 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
   useEffect(() => {
     const savedMap = localStorage.getItem(SAVED_MAP_KEY);
     const savedOcc = localStorage.getItem(SAVED_OCCUPATION_KEY);
+    const savedPlayer = localStorage.getItem(SAVED_PLAYER_DATA_KEY);
     
     let data;
     if (savedMap) {
@@ -234,6 +273,26 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
         // ignore
       }
     }
+
+    if (savedPlayer) {
+      try {
+        const pData = JSON.parse(savedPlayer);
+        setPlayerLevel(pData.level || 1);
+        setBuildPoints(pData.buildPoints || 0);
+        setBuildings(pData.buildings || []);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const savedOfficials = localStorage.getItem(SAVED_OFFICIALS_KEY);
+    if (savedOfficials) {
+      try {
+        setOfficials(JSON.parse(savedOfficials));
+      } catch (e) {
+        // ignore
+      }
+    }
   }, []);
 
   const saveOccupation = (cities: string[], passes: string[]) => {
@@ -242,12 +301,30 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
     localStorage.setItem(SAVED_OCCUPATION_KEY, JSON.stringify({ cities, passes }));
   };
 
+  const savePlayerData = (level: number, points: number, blds: BuildingData[]) => {
+    setPlayerLevel(level);
+    setBuildPoints(points);
+    setBuildings(blds);
+    localStorage.setItem(SAVED_PLAYER_DATA_KEY, JSON.stringify({ level, buildPoints: points, buildings: blds }));
+  };
+
   const handleRegenerate = () => {
     const data = generateMapData();
     localStorage.setItem(SAVED_MAP_KEY, JSON.stringify(data));
     setMapData(data);
     saveOccupation([], []);
+    savePlayerData(1, 0, []);
     centerOnPlayer(data.map);
+  };
+
+  const handleResetData = () => {
+    saveOccupation([], []);
+    savePlayerData(1, 0, []);
+    setOfficials(INITIAL_OFFICIALS);
+    localStorage.removeItem(SAVED_OFFICIALS_KEY);
+    if (mapData) {
+      centerOnPlayer(mapData.map);
+    }
   };
 
   const centerOnPlayer = (currentMap: HexCell[][]) => {
@@ -299,6 +376,7 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
+    dragDistanceRef.current = 0;
     setLastPos({ x: e.clientX, y: e.clientY });
   };
 
@@ -306,6 +384,7 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
     if (isDragging) {
       const dx = e.clientX - lastPos.x;
       const dy = e.clientY - lastPos.y;
+      dragDistanceRef.current += Math.abs(dx) + Math.abs(dy);
       setTransform(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
       setLastPos({ x: e.clientX, y: e.clientY });
       setHoveredCell(null);
@@ -332,21 +411,145 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
     setIsDragging(false);
   };
 
-  const handleMouseClick = (e: React.MouseEvent) => {
-    if (isDragging || !hoveredCell || !mapData) return;
-    
-    const cell = mapData.map[hoveredCell.q][hoveredCell.r];
-    
-    if (cell.terrain === 'city' && cell.cityId) {
-      setSelectedCity({ id: cell.cityId, x: e.clientX, y: e.clientY });
-      setSelectedPass(null);
-    } else if (cell.terrain === 'pass') {
-      setSelectedPass({ q: hoveredCell.q, r: hoveredCell.r, x: e.clientX, y: e.clientY });
-      setSelectedCity(null);
-    } else {
-      setSelectedCity(null);
-      setSelectedPass(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      dragDistanceRef.current = 0;
+      setLastPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
     }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isDragging && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - lastPos.x;
+      const dy = e.touches[0].clientY - lastPos.y;
+      dragDistanceRef.current += Math.abs(dx) + Math.abs(dy);
+      setTransform(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+      setLastPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+      
+      if (mapData && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.touches[0].clientX - rect.left;
+        const mouseY = e.touches[0].clientY - rect.top;
+        
+        const mapX = (mouseX - transform.x) / transform.scale;
+        const mapY = (mouseY - transform.y) / transform.scale;
+        
+        const r = Math.floor(mapY / (H * 0.75));
+        const c = Math.floor((mapX - (r & 1) * W / 2) / W);
+        
+        if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
+          setHoveredCell({ q: c, r: r, x: e.touches[0].clientX, y: e.touches[0].clientY });
+        } else {
+          setHoveredCell(null);
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  const getCityBuildableCells = () => {
+    if (!mapData) return [];
+    
+    // Find player city
+    let playerQ = 32, playerR = 41;
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        if (mapData.map[c][r].isPlayerCity) {
+          playerQ = c; playerR = r; break;
+        }
+      }
+    }
+
+    // Get all cells within distance 1 of player city or any city building
+    const buildable: {q: number, r: number}[] = [];
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        const cell = mapData.map[c][r];
+        // Can build on plain, not occupied by other buildings, not mountain/pass/city
+        if (cell.terrain === 'plain' && !buildings.some(b => b.q === c && b.r === r)) {
+          let isAdjacent = hexDistance(playerQ, playerR, c, r) === 1;
+          if (!isAdjacent) {
+            isAdjacent = buildings.some(b => 
+              CITY_BUILDING_TYPES.some(t => t.id === b.type) && 
+              hexDistance(b.q, b.r, c, r) === 1
+            );
+          }
+          if (isAdjacent) {
+            buildable.push({q: c, r});
+          }
+        }
+      }
+    }
+    return buildable;
+  };
+
+  const handleMouseClick = (e: React.MouseEvent) => {
+    if (dragDistanceRef.current > 10 || !mapData || !containerRef.current) return;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const mapX = (mouseX - transform.x) / transform.scale;
+    const mapY = (mouseY - transform.y) / transform.scale;
+    
+    const r = Math.floor(mapY / (H * 0.75));
+    const c = Math.floor((mapX - (r & 1) * W / 2) / W);
+    
+    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
+    
+    const cell = mapData.map[c][r];
+    
+    // Close all menus first
+    setSelectedCity(null);
+    setSelectedPass(null);
+    setSelectedPlayerCity(null);
+    setSelectedBuildCell(null);
+
+    const existingBuilding = buildings.find(b => b.q === c && b.r === r);
+
+    if (cell.isPlayerCity) {
+      setSelectedPlayerCity({ x: e.clientX, y: e.clientY });
+    } else if (existingBuilding) {
+      setSelectedBuildingInfo({ building: existingBuilding, x: e.clientX, y: e.clientY });
+    } else if (cell.terrain === 'plain') {
+      const cityBuildable = getCityBuildableCells();
+      const isCityBuildable = cityBuildable.some(b => b.q === c && b.r === r);
+      
+      if (isCityBuildable && buildPoints > 0) {
+        setSelectedBuildCell({ q: c, r: r, x: e.clientX, y: e.clientY, type: 'both' });
+      } else {
+        setSelectedBuildCell({ q: c, r: r, x: e.clientX, y: e.clientY, type: 'combat' });
+      }
+    } else if (cell.terrain === 'city' && cell.cityId) {
+      setSelectedCity({ id: cell.cityId, x: e.clientX, y: e.clientY });
+    } else if (cell.terrain === 'pass') {
+      setSelectedPass({ q: c, r: r, x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleUpgradeCity = () => {
+    savePlayerData(playerLevel + 1, buildPoints + 1, buildings);
+    setCelebration({ x: selectedPlayerCity!.x, y: selectedPlayerCity!.y, text: '主城升级！' });
+    setTimeout(() => setCelebration(null), 2000);
+    setSelectedPlayerCity(null);
+  };
+
+  const handleBuild = (typeId: string) => {
+    if (!selectedBuildCell) return;
+    const isCombat = COMBAT_BUILDING_TYPES.some(t => t.id === typeId);
+    if (!isCombat && buildPoints <= 0) return;
+    
+    const newBuilding = { q: selectedBuildCell.q, r: selectedBuildCell.r, type: typeId };
+    const newBuildPoints = isCombat ? buildPoints : buildPoints - 1;
+    savePlayerData(playerLevel, newBuildPoints, [...buildings, newBuilding]);
+    setCelebration({ x: selectedBuildCell.x, y: selectedBuildCell.y, text: '建造成功！' });
+    setTimeout(() => setCelebration(null), 2000);
+    setSelectedBuildCell(null);
   };
 
   const canOccupyCity = (cityId: string) => {
@@ -445,14 +648,20 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
     }
   }
 
+  const buildableCells = buildPoints > 0 ? getCityBuildableCells() : [];
+
   return (
-    <div className="w-full h-screen bg-[#111] overflow-hidden relative" 
+    <div className="w-full h-screen bg-[#111] overflow-hidden relative touch-none" 
          ref={containerRef}
          onWheel={handleWheel}
          onMouseDown={handleMouseDown}
          onMouseMove={handleMouseMove}
          onMouseUp={handleMouseUp}
          onMouseLeave={handleMouseUp}
+         onTouchStart={handleTouchStart}
+         onTouchMove={handleTouchMove}
+         onTouchEnd={handleTouchEnd}
+         onTouchCancel={handleTouchEnd}
          onClick={handleMouseClick}>
       
       <div className="absolute top-4 left-4 z-10 flex gap-4">
@@ -468,6 +677,12 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
         >
           重新生成地图
         </button>
+        <button 
+          onClick={handleResetData}
+          className="bg-red-600 text-white px-4 py-2 rounded font-bold hover:bg-red-700 transition-colors cursor-pointer border border-red-800"
+        >
+          重置数据
+        </button>
       </div>
 
       <div className="absolute top-4 right-4 z-10 bg-black/50 p-4 rounded text-white text-sm pointer-events-none border border-[#333]">
@@ -476,9 +691,9 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
         <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 bg-[#555] border border-[#777]"></div> 山脉</div>
         <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 bg-[#8b4513] border border-[#a0522d]"></div> 关口</div>
         <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 bg-[#ffcc00] border border-[#ff9900]"></div> 城市</div>
-        <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 bg-[#00ff88] border border-[#00cc66]"></div> 玩家主城</div>
+        <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 bg-[#00ff88] border border-[#00cc66]"></div> 玩家主城 (Lv.{playerLevel})</div>
         <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 bg-[rgba(0,100,255,0.4)] border border-[#0066ff]"></div> 已占领区域</div>
-        <div className="mt-2 text-xs text-[#aaa]">滚轮缩放，拖拽平移<br/>点击城市/关口进行占领</div>
+        <div className="mt-2 text-xs text-[#aaa]">滚轮缩放，拖拽平移<br/>点击城市/关口进行占领<br/>点击主城升级并开拓地块</div>
       </div>
 
       {hoveredCell && (
@@ -491,18 +706,132 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
             let name = '平地';
             if (cell.terrain === 'mountain') name = '山脉';
             if (cell.terrain === 'pass') name = '关口';
-            if (cell.isPlayerCity) name = '玩家主城';
+            if (cell.isPlayerCity) name = `玩家主城 (Lv.${playerLevel})`;
             if (cell.terrain === 'city' && cell.cityId) {
               const city = mapData.cities.find(c => c.id === cell.cityId);
               if (city) name = city.name;
+            }
+            const building = buildings.find(b => b.q === hoveredCell.q && b.r === hoveredCell.r);
+            let appointmentStatus = '';
+            let isCombat = false;
+            if (building) {
+              const bType = ALL_BUILDING_TYPES.find(t => t.id === building.type);
+              if (bType) name = `${bType.icon} ${bType.name}`;
+              isCombat = COMBAT_BUILDING_TYPES.some(t => t.id === building.type);
+              
+              const b = building;
+              const hasChief = b.appointments?.chief;
+              const deputyCount = b.appointments?.deputies?.filter(d => d).length || 0;
+              const discipleCount = b.appointments?.disciples?.filter(d => d).length || 0;
+              const total = (hasChief ? 1 : 0) + deputyCount + discipleCount;
+              if (total > 0) {
+                appointmentStatus = `已委任 (${total}人)`;
+              } else {
+                appointmentStatus = '未委任';
+              }
             }
             return (
               <>
                 <div className="font-bold text-[#00d2ff]">{name}</div>
                 <div className="text-xs text-[#ccc]">坐标: ({hoveredCell.q}, {hoveredCell.r})</div>
+                {building && !isCombat && (
+                  <div className="text-xs mt-1 text-[#00ff88]">
+                    委任状态: {appointmentStatus}
+                  </div>
+                )}
               </>
             );
           })()}
+        </div>
+      )}
+
+      {selectedBuildingInfo && (
+        <div 
+          className="absolute z-30 bg-[#222] text-white p-3 rounded border border-[#00d2ff] shadow-xl flex flex-col gap-2 w-48"
+          style={{ left: selectedBuildingInfo.x + 10, top: selectedBuildingInfo.y + 10 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="font-bold text-center border-b border-[#444] pb-1 text-[#00d2ff]">
+            {ALL_BUILDING_TYPES.find(t => t.id === selectedBuildingInfo.building.type)?.name}
+          </div>
+          <div className="text-xs text-[#aaa] text-center mb-1">
+            坐标: ({selectedBuildingInfo.building.q}, {selectedBuildingInfo.building.r})
+          </div>
+          
+          {(() => {
+            const isCombat = COMBAT_BUILDING_TYPES.some(t => t.id === selectedBuildingInfo.building.type);
+            if (isCombat) return null;
+            
+            const b = selectedBuildingInfo.building;
+            const hasChief = b.appointments?.chief;
+            const deputyCount = b.appointments?.deputies?.filter(d => d).length || 0;
+            const discipleCount = b.appointments?.disciples?.filter(d => d).length || 0;
+            const total = (hasChief ? 1 : 0) + deputyCount + discipleCount;
+            const statusText = total > 0 ? `已委任 (${total}人)` : '未委任';
+
+            return (
+              <>
+                <div className="text-xs text-center text-[#00ff88] mb-2">
+                  状态: {statusText}
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedBuildingForAppointment(selectedBuildingInfo.building);
+                    setSelectedBuildingInfo(null);
+                  }}
+                  className="w-full py-1.5 rounded text-xs font-bold bg-[#333] hover:bg-[#444] border border-[#555] text-[#00ff88]"
+                >
+                  委任文官
+                </button>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {selectedPlayerCity && (
+        <div 
+          className="absolute z-30 bg-[#222] text-white p-3 rounded border border-[#00ff88] shadow-xl flex flex-col gap-2"
+          style={{ left: selectedPlayerCity.x + 10, top: selectedPlayerCity.y + 10 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="font-bold text-center border-b border-[#444] pb-1 text-[#00ff88]">
+            玩家主城 (Lv.{playerLevel})
+          </div>
+          <div className="text-xs text-[#aaa] text-center">升级可获得1次开拓次数</div>
+          <button
+            onClick={handleUpgradeCity}
+            className="px-4 py-1.5 rounded text-sm font-bold bg-[#00ff88] text-black hover:bg-[#00cc66] cursor-pointer mt-1"
+          >
+            升级主城 (至Lv.{playerLevel + 1})
+          </button>
+        </div>
+      )}
+
+      {selectedBuildCell && (
+        <div 
+          className="absolute z-30 bg-[#222] text-white p-3 rounded border border-[#00d2ff] shadow-xl flex flex-col gap-2 w-48"
+          style={{ left: selectedBuildCell.x + 10, top: selectedBuildCell.y + 10 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="font-bold text-center border-b border-[#444] pb-1 text-[#00d2ff]">
+            {selectedBuildCell.type === 'combat' ? '选择战斗建筑' : '选择建筑'}
+          </div>
+          {selectedBuildCell.type !== 'combat' && (
+            <div className="text-xs text-[#aaa] text-center mb-1">剩余开拓次数: {buildPoints}</div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {(selectedBuildCell.type === 'combat' ? COMBAT_BUILDING_TYPES : ALL_BUILDING_TYPES).map(b => (
+              <button
+                key={b.id}
+                onClick={() => handleBuild(b.id)}
+                className="flex items-center justify-center gap-1 px-2 py-1.5 rounded text-xs font-bold bg-[#333] hover:bg-[#444] border border-[#555] cursor-pointer"
+                style={{ color: b.color }}
+              >
+                <span>{b.icon}</span> {b.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -577,6 +906,36 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
         </div>
       )}
 
+      {selectedBuildingForAppointment && (
+        <AppointmentModal
+          building={selectedBuildingForAppointment}
+          allBuildings={buildings}
+          officials={officials}
+          onClose={() => setSelectedBuildingForAppointment(null)}
+          onResetSkill={(officialId) => {
+            const updatedOfficials = officials.map(o => {
+              if (o.id === officialId) {
+                return { ...o, randomSkill: generateRandomSkill() };
+              }
+              return o;
+            });
+            setOfficials(updatedOfficials);
+            localStorage.setItem(SAVED_OFFICIALS_KEY, JSON.stringify(updatedOfficials));
+          }}
+          onSave={(appointments) => {
+            const updatedBuildings = buildings.map(b => 
+              b.q === selectedBuildingForAppointment.q && b.r === selectedBuildingForAppointment.r 
+                ? { ...b, appointments } 
+                : b
+            );
+            savePlayerData(playerLevel, buildPoints, updatedBuildings);
+            setSelectedBuildingForAppointment(null);
+            setCelebration({ x: window.innerWidth / 2, y: window.innerHeight / 2, text: '委任成功！' });
+            setTimeout(() => setCelebration(null), 2000);
+          }}
+        />
+      )}
+
       <div 
         style={{ 
           transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
@@ -592,6 +951,8 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
             const cx = W * (c + 0.5 * (r & 1)) + W/2;
             const cy = H * 0.75 * r + H/2;
             
+            const building = buildings.find(b => b.q === c && b.r === r);
+            
             let fill = '#222';
             let stroke = '#333';
             
@@ -604,7 +965,7 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
             } else if (cell.terrain === 'city') {
               fill = '#ffcc00';
               stroke = '#ff9900';
-            } else if (cell.isPlayerCity) {
+            } else if (cell.isPlayerCity || building) {
               fill = '#00ff88';
               stroke = '#00cc66';
             }
@@ -631,6 +992,7 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
             }
 
             const isHoveredCell = hoveredCell?.q === c && hoveredCell?.r === r;
+            const isBuildable = buildableCells.some(b => b.q === c && b.r === r);
 
             return (
               <g key={`${c}-${r}`} transform={`translate(${cx}, ${cy})`}>
@@ -662,6 +1024,15 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
                     className="animate-pulse"
                   />
                 )}
+                {isBuildable && (
+                  <polygon 
+                    points={hexPoints} 
+                    fill="rgba(0, 210, 255, 0.3)" 
+                    stroke="#00d2ff"
+                    strokeWidth="2"
+                    className="animate-pulse"
+                  />
+                )}
                 {cell.terrain === 'city' && (
                   <text x="0" y="4" fontSize="8" textAnchor="middle" fill="#000" fontWeight="bold" pointerEvents="none">
                     城
@@ -670,6 +1041,11 @@ export default function WorldMap({ onEnterBattle }: { onEnterBattle: () => void 
                 {cell.isPlayerCity && (
                   <text x="0" y="4" fontSize="8" textAnchor="middle" fill="#000" fontWeight="bold" pointerEvents="none">
                     主
+                  </text>
+                )}
+                {building && (
+                  <text x="0" y="4" fontSize="12" textAnchor="middle" pointerEvents="none">
+                    {ALL_BUILDING_TYPES.find(t => t.id === building.type)?.icon}
                   </text>
                 )}
               </g>
