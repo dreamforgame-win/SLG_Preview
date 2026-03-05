@@ -10,6 +10,7 @@ interface Tab {
 
 const DEFAULT_TABS: Tab[] = [
   { id: '1', name: '第一页', content: '这里是第一页的内容...\n\n支持 Markdown 语法，例如：\n\n- 列表项 1\n- 列表项 2\n\n**加粗文本**\n\n![示例图片](https://picsum.photos/seed/ppt/400/300)' }
+  { id: '2', name: '宏观战场', content: '- 宏观战场\n  - 移除铺路机制\n    - 城与城之间无需通过铺路连接\n    - 增加城市密度，从铺路转变为更频繁的打城\n    - 当占领城市后，即可连通到下一座城\n      - 可以设定无成本或有成本\n        - 无成本则直接连通与之关联的城市，可以继续往下推\n        - 有成本则需要盟主消耗联盟资源进行道路开拓（即时间成本+资源成本）\n          - 开拓可以【职业】加速，对应职业成员派兵集合即可加速开拓\n      - 或者增加连通收益\n        - 连通后玩家在区域内的行军速度得到提升\n  - 战斗怎么打\n    - 联盟之间的战斗在三谋基础之上丰富建筑类型，共分为3类型\n      - 阻挡型（高血量）\n      - 攻击型（中血量中攻击）\n      - 陷阱类（消耗型高攻击）\n      - 这个设定旨在把地形构筑加入到战斗之中，把沙盒主动权交给玩家\n        - 涉及两个维度\n          - 联盟发起\n            - 大型军事建筑\n            - 小型建筑，种类多且量大\n          - 个人发起\n            - 小型建筑，数量较少\n        - 由联盟发起后，需要成员配合援建加速，让对应职业和普通玩家有更多的\n    - 城市和玩家在战役中起什么作用：城市集群式的网状对冲\n      - 设定不同等级的城市能够连通一定数量的与之相邻的城市\n        - 等级越高，能够连通的层级和每层可以连通的数量越多\n          - 1-3级能够连通1层，每层最多2个城市\n          - 2-6级能够连通2层，每层最多3个城市\n          - ……\n        - 这些城市将为其提供援助和收益，比如城市预备兵恢复越快，城市耐久加成等\n      - 城市加成激活则需要玩家主城提供，区域内的玩家主城越多，城市加成越高\n        - 要求玩家主城根据战役调整，形成主力在前，成员在后的布局，但是大家都会依托在城市脉络里面，形成抱团的趋势\n      - 职业的用途：设定3种大类的职业\n        - 战斗类（战斗硬刚，大佬专属）\n          - 擅长进攻的职业\n          - 擅长防守的职业\n        - 建造类\n          - 建造战事类建筑的职业\n          - 建造发展类建筑的职业\n        - 支援类\n          - 提供各种资源支持，比如运粮，发电![图片描述](https://gd-hbimg-edge.huaban.com/21e5698a6ba337b78b95f01e9dd4068fb8540f741935b-kHCCN0?auth_key=1772683200-8be56e16f3b941f9bf734d01c3cf88d1-0-311b78848f36d756d92bf9241a89b91b)'}
 ];
 
 export const PPTMode: React.FC = () => {
@@ -150,12 +151,18 @@ export const PPTMode: React.FC = () => {
       });
       
       if (response.ok) {
-        alert('写入存档成功！');
         // Re-fetch to ensure consistency with file
         const res = await fetch('/api/ppt');
         if (res.ok) {
           const data = await res.json();
           setTabs(data);
+          
+          // Debug info
+          const debugRes = await fetch('/api/debug');
+          const debugData = await debugRes.json();
+          alert(`写入存档成功！\n\nDebug Info:\nCWD: ${debugData.cwd}\nFile: ${debugData.dataFile}\nExists: ${debugData.fileExists}\nContent: ${debugData.fileContent}`);
+        } else {
+          alert('写入存档成功，但重新读取失败。');
         }
       } else {
         alert('写入存档失败，请重试。');
